@@ -1,0 +1,4 @@
+{
+  "mode": "block",
+  "exemptAgentTypes": ["fork", "statusline-setup", "claude-code-guide"]
+}
