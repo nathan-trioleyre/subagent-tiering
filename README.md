@@ -1,7 +1,6 @@
 # subagent-tiering
 
-Un petit framework pour **Claude Code** qui réduit la consommation de tokens. Il fait tourner chaque sous-agent sur un modèle et un effort adaptés à sa tâche, au lieu d'hériter du modèle de la session (souvent Opus). Il mesure aussi la consommation réelle de chaque sous-agent.
-
+Un petit framework pour **Claude Code** qui réduit la consommation de tokens. Il fait tourner chaque sous-agent sur un modèle et un effort adaptés à sa tâche, au lieu d'hériter du modèle de la session (souvent Opus).
 Il s'applique à **tous les sous-agents**, quel que soit le déclencheur : Claude lui-même, un skill, un plugin (Superpowers ou autre), un workflow, une commande slash.
 
 Il s'installe dans la config **globale** (`~/.claude`) : il fonctionne dans tous les projets sans rien ajouter aux dépôts.
@@ -15,7 +14,6 @@ Il s'installe dans la config **globale** (`~/.claude`) : il fonctionne dans tous
 | Réglages natifs | `env` dans `settings.json` : `CLAUDE_CODE_SUBAGENT_MODEL=sonnet`, `CLAUDE_CODE_SUBAGENT_EFFORT=medium`, `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=3` | **Technique.** Modèle et effort par défaut des sous-agents (quand rien d'autre ne les fixe), et 3 sous-agents simultanés au maximum. |
 | Agent `Explore` remplacé | `~/.claude/agents/Explore.md` : Haiku, effort faible, `maxTurns: 25`, `omitClaudeMd`, outils de lecture seulement | **Technique.** L'Explore intégré tourne sur le modèle de la session. Notre version prend sa place partout, y compris quand un plugin l'appelle. |
 | Garde-fou | hook `PreToolUse` sur `Agent`/`Task` | **Technique.** Bloque tout sous-agent lancé sans `model` explicite (sauf ceux qui fixent leur modèle dans leur fichier) et renvoie la grille des niveaux à Claude. |
-| Mesure | hook `SubagentStop` | Lit l'historique de chaque sous-agent terminé et journalise les **vrais tokens** consommés, par modèle. |
 | Modèle par défaut | `model: "sonnet"` dans `settings.json` (`settings/settings.json`) | **Technique** pour le CLI. Dans l'application de bureau, le sélecteur de modèle garde son propre choix. |
 | Règles | bloc balisé dans `~/.claude/CLAUDE.md` | **Consigne.** Quand ne pas déléguer, et quel niveau choisir. Les instructions de l'utilisateur passent avant celles des plugins. |
 
@@ -59,7 +57,7 @@ cd subagent-tiering
 
 Relance tes sessions Claude Code ensuite.
 
-Pour mettre à jour : `git pull`, puis relance le script. On peut le relancer sans créer de doublon. Ton `config.json` et ton journal sont conservés.
+Pour mettre à jour : `git pull`, puis relance le script. On peut le relancer sans créer de doublon. Ton `config.json` est conservé.
 
 Ton contenu existant est préservé :
 - **`CLAUDE.md`** : seul le bloc entre `<!-- subagent-tiering:start -->` et `<!-- subagent-tiering:end -->` est géré.
@@ -74,16 +72,6 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall
 ./install.sh --uninstall
 ```
 
-## Vérifier que ça marche
-```bash
-node ~/.claude/subagent-tiering/guard.js --report 7
-```
-Sur les 7 derniers jours, le rapport donne :
-- les lancements de sous-agents, par modèle demandé, par effort, par type d'agent et par décision (autorisé ou bloqué) ;
-- les **tokens réellement consommés** (entrée, écriture et lecture de cache, sortie), par modèle et par type d'agent.
-
-Le journal brut se trouve dans `~/.claude/subagent-tiering/dispatch.log`, au format JSON, une ligne par entrée.
-
 ## Réglages (`~/.claude/subagent-tiering/config.json`)
 ```json
 {
@@ -93,8 +81,7 @@ Le journal brut se trouve dans `~/.claude/subagent-tiering/dispatch.log`, au for
 ```
 - `mode` :
   - `block` (défaut) : refuse les lancements sans modèle ;
-  - `warn` : laisse passer, mais rappelle la grille à Claude ;
-  - `log` : se contente de journaliser.
+  - `warn` : laisse passer, mais rappelle la grille à Claude.
 - Les agents dont le fichier (`~/.claude/agents/*.md` ou `.claude/agents/*.md` du projet) fixe un `model:` sont exemptés automatiquement. C'est le cas d'`Explore`.
 - Pour les agents de plugins (`plugin:agent`), le garde-fou ne voit pas leur fichier. Il demande donc un modèle explicite, et ce modèle remplace celui de l'agent.
 

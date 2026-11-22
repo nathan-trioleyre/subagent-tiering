@@ -106,10 +106,8 @@ Write-Host ("  " + $(if ($Uninstall) { '- rules removed from' } else { '+ rules 
 if ((Test-Path (Join-Path $legacyDir 'guard.js'))) {
     if (-not $Uninstall) {
         New-Item -ItemType Directory -Force -Path $toolDir | Out-Null
-        foreach ($f in 'dispatch.log', 'config.json') {
-            $src = Join-Path $legacyDir $f; $dst = Join-Path $toolDir $f
-            if ((Test-Path $src) -and -not (Test-Path $dst)) { Move-Item $src $dst }
-        }
+        $src = Join-Path $legacyDir 'config.json'; $dst = Join-Path $toolDir 'config.json'
+        if ((Test-Path $src) -and -not (Test-Path $dst)) { Move-Item $src $dst }
     }
     Remove-Item $legacyDir -Recurse -Force -Confirm:$false
     Write-Host "  - legacy folder $legacyDir migrated and removed"
@@ -119,6 +117,8 @@ if ($Uninstall) {
 } elseif ($installHook) {
     New-Item -ItemType Directory -Force -Path $toolDir | Out-Null
     Copy-Item (Join-Path $RepoDir 'hooks\guard.js') (Join-Path $toolDir 'guard.js') -Force
+    $oldLog = Join-Path $toolDir 'dispatch.log'   # journal of earlier versions, no longer written
+    if (Test-Path $oldLog) { Remove-Item $oldLog -Confirm:$false; Write-Host "  - old dispatch.log removed" }
     $cfg = Join-Path $toolDir 'config.json'
     if (-not (Test-Path $cfg)) { Copy-Item (Join-Path $RepoDir 'hooks\config.json') $cfg }
     Write-Host "  + hook copied to $toolDir (config.json kept if it already existed)"
@@ -158,14 +158,13 @@ foreach ($prop in $topKeys.PSObject.Properties) {
 if (-not ($settings.PSObject.Properties.Name -contains 'hooks')) {
     $settings | Add-Member -NotePropertyName hooks -NotePropertyValue (New-Object PSObject)
 }
-$preEntry = $null; $stopEntry = $null
+$preEntry = $null
 if ($installHook) {
     $cmd = 'node "' + ((Join-Path $toolDir 'guard.js') -replace '\\', '/') + '"'
     $preEntry  = [PSCustomObject]@{ matcher = 'Agent|Task'; hooks = @([PSCustomObject]@{ type = 'command'; command = $cmd; timeout = 10 }) }
-    $stopEntry = [PSCustomObject]@{ hooks = @([PSCustomObject]@{ type = 'command'; command = $cmd; timeout = 15 }) }
 }
 Set-HookEvent $settings 'PreToolUse'   $preEntry
-Set-HookEvent $settings 'SubagentStop' $stopEntry
+Set-HookEvent $settings 'SubagentStop' $null   # removes the measurement hook added by earlier versions
 if (@($settings.hooks.PSObject.Properties).Count -eq 0) { $settings.PSObject.Properties.Remove('hooks') }
 
 Write-Utf8File $settingsPath (($settings | ConvertTo-Json -Depth 32) + "`n")

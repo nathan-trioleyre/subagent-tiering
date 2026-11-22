@@ -48,9 +48,7 @@ done
 if [ -f "$LEGACY_DIR/guard.js" ]; then
   if [ "$UNINSTALL" = 0 ]; then
     mkdir -p "$TOOL_DIR"
-    for f in dispatch.log config.json; do
-      [ -f "$LEGACY_DIR/$f" ] && [ ! -f "$TOOL_DIR/$f" ] && mv "$LEGACY_DIR/$f" "$TOOL_DIR/$f"
-    done
+    if [ -f "$LEGACY_DIR/config.json" ] && [ ! -f "$TOOL_DIR/config.json" ]; then mv "$LEGACY_DIR/config.json" "$TOOL_DIR/config.json"; fi
   fi
   rm -rf "$LEGACY_DIR"; echo "  - legacy folder $LEGACY_DIR migrated and removed"
 fi
@@ -61,6 +59,8 @@ elif [ "$HAS_NODE" = 1 ]; then
   INSTALL_HOOK=1
   mkdir -p "$TOOL_DIR"
   cp "$REPO_DIR/hooks/guard.js" "$TOOL_DIR/guard.js"
+  # journal of earlier versions, no longer written
+  if [ -f "$TOOL_DIR/dispatch.log" ]; then rm -f "$TOOL_DIR/dispatch.log"; echo "  - old dispatch.log removed"; fi
   [ -f "$TOOL_DIR/config.json" ] || cp "$REPO_DIR/hooks/config.json" "$TOOL_DIR/config.json"
   echo "  + hook copied to $TOOL_DIR (config.json kept if it already existed)"
 else
@@ -116,13 +116,14 @@ def ours(entry):
 
 hooks = settings.setdefault("hooks", {})
 cmd = 'node "' + os.path.join(cdir, name, "guard.js").replace("\\", "/") + '"'
+# SubagentStop: no entry any more, only removes the measurement hook added by earlier versions.
 new = {
     "PreToolUse": {"matcher": "Agent|Task", "hooks": [{"type": "command", "command": cmd, "timeout": 10}]},
-    "SubagentStop": {"hooks": [{"type": "command", "command": cmd, "timeout": 15}]},
+    "SubagentStop": None,
 }
 for event, entry in new.items():
     lst = [e for e in hooks.get(event, []) if not ours(e)]
-    if install_hook: lst.append(entry)
+    if install_hook and entry: lst.append(entry)
     if lst: hooks[event] = lst
     else: hooks.pop(event, None)
 if not hooks: settings.pop("hooks")
