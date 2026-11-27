@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs (or removes) subagent-tiering into the user's global Claude Code config (~/.claude).
 # Usage: ./install.sh [--uninstall] [--claude-dir PATH]
-# Requires: python3 (to merge settings.json safely). Node.js is needed for the hook.
+# Requires: python3 (to merge settings.json safely and run the guard hook).
 set -euo pipefail
 
 NAME="subagent-tiering"
@@ -21,7 +21,6 @@ done
 
 PY="$(command -v python3 || command -v python || true)"
 [ -n "$PY" ] || { echo "python3 is required" >&2; exit 1; }
-HAS_NODE=0; command -v node >/dev/null 2>&1 && HAS_NODE=1
 
 TOOL_DIR="$CLAUDE_DIR/$NAME"
 LEGACY_DIR="$CLAUDE_DIR/model-router"
@@ -55,16 +54,15 @@ fi
 INSTALL_HOOK=0
 if [ "$UNINSTALL" = 1 ]; then
   rm -rf "$TOOL_DIR" && echo "  - $TOOL_DIR removed"
-elif [ "$HAS_NODE" = 1 ]; then
+else
   INSTALL_HOOK=1
   mkdir -p "$TOOL_DIR"
-  cp "$REPO_DIR/hooks/guard.js" "$TOOL_DIR/guard.js"
+  cp "$REPO_DIR/hooks/guard.py" "$TOOL_DIR/guard.py"
+  if [ -f "$TOOL_DIR/guard.js" ]; then rm -f "$TOOL_DIR/guard.js"; echo "  - old guard.js removed"; fi
   # journal of earlier versions, no longer written
   if [ -f "$TOOL_DIR/dispatch.log" ]; then rm -f "$TOOL_DIR/dispatch.log"; echo "  - old dispatch.log removed"; fi
   [ -f "$TOOL_DIR/config.json" ] || cp "$REPO_DIR/hooks/config.json" "$TOOL_DIR/config.json"
   echo "  + hook copied to $TOOL_DIR (config.json kept if it already existed)"
-else
-  echo "  ! Node.js not found: the hook is skipped (rules, agents and env vars are still installed)." >&2
 fi
 
 # 3 & 4. CLAUDE.md managed block + settings.json (env vars, hooks)
@@ -76,7 +74,7 @@ repo, cdir, uninstall, install_hook, name = sys.argv[1], sys.argv[2], sys.argv[3
 start, end = f"<!-- {name}:start -->", f"<!-- {name}:end -->"
 legacy_start, legacy_end = "<!-- claude-model-router:start -->", "<!-- claude-model-router:end -->"
 legacy_heading = "Model & sub-agent routing (token economy)"
-hook_tags = (f"{name}/guard.js", "model-router/guard.js")
+hook_tags = (f"{name}/guard.py", f"{name}/guard.js", "model-router/guard.js")
 
 def remove_block(text, s, e, must_contain=None):
     pat = re.compile(r"\n?" + re.escape(s) + r"(.*?)" + re.escape(e) + r"\n?", re.S)
@@ -115,7 +113,7 @@ def ours(entry):
     return any(t in (h.get("command") or "") for h in entry.get("hooks", []) for t in hook_tags)
 
 hooks = settings.setdefault("hooks", {})
-cmd = 'node "' + os.path.join(cdir, name, "guard.js").replace("\\", "/") + '"'
+cmd = f'"{sys.executable}" "' + os.path.join(cdir, name, "guard.py").replace("\\", "/") + '"'
 # SubagentStop: no entry any more, only removes the measurement hook added by earlier versions.
 new = {
     "PreToolUse": {"matcher": "Agent|Task", "hooks": [{"type": "command", "command": cmd, "timeout": 10}]},

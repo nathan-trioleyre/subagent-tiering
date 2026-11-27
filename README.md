@@ -36,8 +36,7 @@ Mesuré sur une même petite tâche, sur Haiku dans les deux cas : environ 57 00
 
 ## Prérequis
 - Claude Code **v2.1.315 ou plus récent**, pour `CLAUDE_CODE_SUBAGENT_EFFORT`. Les autres réglages fonctionnent sur des versions antérieures.
-- **Node.js** pour les hooks. Sans Node, le reste s'installe quand même et l'installeur affiche un avertissement.
-- **python3** uniquement pour `install.sh` (macOS/Linux).
+- **Python 3.9+** pour le hook `guard.py` (et pour `install.sh` sur macOS/Linux). Sans Python, le reste s'installe quand même sous Windows et l'installeur affiche un avertissement.
 
 ## Installation
 
@@ -86,11 +85,16 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall
 - Pour les agents de plugins (`plugin:agent`), le garde-fou ne voit pas leur fichier. Il demande donc un modèle explicite, et ce modèle remplace celui de l'agent.
 
 ## Personnaliser
-- **Règles** : `rules/CLAUDE.md`, ainsi que le texte de rappel dans `hooks/guard.js`.
+- **Règles** : `rules/CLAUDE.md`, ainsi que le texte de rappel dans `hooks/guard.py`.
 - **Réglages natifs** : `settings/env.json`.
 - **Agents** : `agents/*.md`.
 
 Relance le script d'installation après chaque modification.
+
+## Tests
+```bash
+python -m unittest discover -s tests -v
+```
 
 ## Réglages manuels recommandés (à refaire sur chaque PC)
 L'installeur applique tout ce qui vit dans `~/.claude`. Les réglages ci-dessous dépendent de l'application de bureau ou de ton compte claude.ai : aucun script ne peut les appliquer.

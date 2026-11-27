@@ -21,7 +21,7 @@ $EndMark   = "<!-- $Name`:end -->"
 $LegacyStart   = '<!-- claude-model-router:start -->'
 $LegacyEnd     = '<!-- claude-model-router:end -->'
 $LegacyHeading = 'Model & sub-agent routing (token economy)'
-$HookTags  = @("$Name/guard.js", 'model-router/guard.js')
+$HookTags  = @("$Name/guard.py", "$Name/guard.js", 'model-router/guard.js')
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 # Agents shipped by earlier versions: removed only if they still look like our copies.
 $Retired = @{
@@ -60,8 +60,25 @@ $legacyDir    = Join-Path $ClaudeDir 'model-router'
 $claudeMd     = Join-Path $ClaudeDir 'CLAUDE.md'
 $settingsPath = Join-Path $ClaudeDir 'settings.json'
 $envVars      = Get-Content (Join-Path $RepoDir 'settings\env.json') -Raw | ConvertFrom-Json
-$hasNode      = [bool](Get-Command node -ErrorAction SilentlyContinue)
-$installHook  = (-not $Uninstall) -and $hasNode
+function Find-Python {
+    foreach ($cmd in @('python3', 'python')) {
+        foreach ($cand in @(Get-Command $cmd -All -ErrorAction SilentlyContinue)) {
+            $src = $cand.Source
+            if (-not $src -or $src -like '*\WindowsApps\*') { continue }
+            & $src -c "import sys" 2>$null
+            if ($LASTEXITCODE -eq 0) { return $src }
+        }
+    }
+    $pyCmd = Get-Command py -ErrorAction SilentlyContinue
+    if ($pyCmd) {
+        $resolved = (& py -3 -c "import sys; print(sys.executable)" 2>$null)
+        if ($LASTEXITCODE -eq 0 -and $resolved) { return $resolved.Trim() }
+    }
+    return $null
+}
+
+$pythonBin    = Find-Python
+$installHook  = (-not $Uninstall) -and [bool]$pythonBin
 
 # --- 1. Agents ---------------------------------------------------------------
 New-Item -ItemType Directory -Force -Path $agentsDir | Out-Null
@@ -116,14 +133,16 @@ if ($Uninstall) {
     if (Test-Path $toolDir) { Remove-Item $toolDir -Recurse -Force -Confirm:$false; Write-Host "  - $toolDir removed" }
 } elseif ($installHook) {
     New-Item -ItemType Directory -Force -Path $toolDir | Out-Null
-    Copy-Item (Join-Path $RepoDir 'hooks\guard.js') (Join-Path $toolDir 'guard.js') -Force
+    Copy-Item (Join-Path $RepoDir 'hooks\guard.py') (Join-Path $toolDir 'guard.py') -Force
+    $oldJs = Join-Path $toolDir 'guard.js'
+    if (Test-Path $oldJs) { Remove-Item $oldJs -Confirm:$false; Write-Host "  - old guard.js removed" }
     $oldLog = Join-Path $toolDir 'dispatch.log'   # journal of earlier versions, no longer written
     if (Test-Path $oldLog) { Remove-Item $oldLog -Confirm:$false; Write-Host "  - old dispatch.log removed" }
     $cfg = Join-Path $toolDir 'config.json'
     if (-not (Test-Path $cfg)) { Copy-Item (Join-Path $RepoDir 'hooks\config.json') $cfg }
     Write-Host "  + hook copied to $toolDir (config.json kept if it already existed)"
 } else {
-    Write-Warning "Node.js not found: the hook is skipped (rules, agents and env vars are still installed)."
+    Write-Warning "Python 3 not found: the hook is skipped (rules, agents and env vars are still installed)."
 }
 
 # --- 4. settings.json: env vars + hooks ----------------------------------------
@@ -160,7 +179,7 @@ if (-not ($settings.PSObject.Properties.Name -contains 'hooks')) {
 }
 $preEntry = $null
 if ($installHook) {
-    $cmd = 'node "' + ((Join-Path $toolDir 'guard.js') -replace '\\', '/') + '"'
+    $cmd = '"' + ($pythonBin -replace '\\', '/') + '" "' + ((Join-Path $toolDir 'guard.py') -replace '\\', '/') + '"'
     $preEntry  = [PSCustomObject]@{ matcher = 'Agent|Task'; hooks = @([PSCustomObject]@{ type = 'command'; command = $cmd; timeout = 10 }) }
 }
 Set-HookEvent $settings 'PreToolUse'   $preEntry
